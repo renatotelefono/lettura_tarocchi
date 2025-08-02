@@ -11,8 +11,14 @@ app.use(express.json());
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Servi il frontend statico
-app.use(express.static(path.join(__dirname, "../frontend")));
+// Serve frontend statico e disabilita cache per index.html
+app.use(express.static(path.join(__dirname, "../frontend"), {
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('index.html')) {
+      res.setHeader('Cache-Control', 'no-cache');
+    }
+  }
+}));
 
 // Endpoint per TTS Azure
 app.post("/tts", async (req, res) => {
@@ -40,5 +46,10 @@ app.post("/tts", async (req, res) => {
   response.body.pipe(res);
 });
 
+// Route catch-all per SPA / refresh pagina
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, "../frontend/index.html"));
+});
+
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`✅ Server TTS attivo su http://localhost:${PORT}`));
+app.listen(PORT, () => console.log(`✅ Server attivo su http://localhost:${PORT}`));
