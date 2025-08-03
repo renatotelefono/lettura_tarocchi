@@ -5,10 +5,20 @@
     <title>Tarocchi Vocali</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <style>
-      body { font-family: Arial, sans-serif; text-align: center; padding: 40px; background: #fafafa; }
-      h1 { font-size: 28px; }
+      body { 
+        font-family: Arial, sans-serif; 
+        text-align: center; 
+        padding: 40px; 
+        background: #fafafa; 
+      }
+      h1 { font-size: 28px; margin: 0; }
       p { font-size: 18px; color: #444; }
-      button { padding: 15px 30px; font-size: 18px; margin: 20px; cursor: pointer; }
+      button { 
+        padding: 15px 30px; 
+        font-size: 18px; 
+        margin: 20px; 
+        cursor: pointer; 
+      }
       #output { margin-top: 20px; font-size: 22px; color: #333; }
 
       .top-bar {
@@ -69,12 +79,36 @@
       #cardMarkdown.visible { opacity: 1; }
 
       .error { color: red; font-weight: bold; }
+
+      /* Contenitore titolo + pulsante */
+      .header-bar {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 20px;
+        margin-bottom: 10px;
+      }
+
+      .explain-btn {
+        background-color: #ffd966;
+        border: 2px solid #444;
+        border-radius: 8px;
+        padding: 8px 16px;
+        font-size: 16px;
+        cursor: pointer;
+      }
     </style>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   </head>
   <body>
-    <h1>🔮 Lettura Tarocchi Vocale</h1>
-    <p>Premi il tasto con il microfono e pronuncia il nome della carta. Verrà mostrata la carta e la sua descrizione.</p>
+    <div class="header-bar">
+      <button id="explainBtn" class="explain-btn">Premi questo tasto e ti spiego cosa fare</button>
+      <h1>🔮 Lettura Tarocchi </h1>
+    </div>
+
+    <p id="introText">
+      Premi il tasto con il microfono con la scritta Ascolta e pronuncia il nome della carta. Verrà mostrata la carta e la sua descrizione.
+    </p>
 
     <div class="top-bar">
       <div>Carte uscite: <span id="usedCount">0</span></div>
@@ -97,6 +131,7 @@
       const usedCount = document.getElementById("usedCount");
       const remainingCount = document.getElementById("remainingCount");
       const usedList = document.getElementById("usedList");
+      const introText = document.getElementById("introText").textContent;
 
       let availableCards = [];
       let usedCards = [];
@@ -140,8 +175,18 @@
         const audioBlob = await response.blob();
         const audioUrl = URL.createObjectURL(audioBlob);
         const audio = new Audio(audioUrl);
-        audio.play();
+        await audio.play();
+        return new Promise(resolve => {
+          audio.onended = resolve;
+        });
       }
+
+      // Click sul bottone Spiegazioni
+      document.getElementById("explainBtn").addEventListener("click", async () => {
+        output.textContent = "🔊 Spiegazione in corso...";
+        await playWithAzureTTS(introText);
+        output.textContent = "In attesa...";
+      });
 
       if (!SpeechRecognition) {
         alert("❌ Il tuo browser non supporta la Web Speech API");
@@ -191,15 +236,22 @@
             return;
           }
           let mdText = await res.text();
+
+          // 1️⃣ Rimuove frontmatter
           mdText = mdText.replace(/^---[\s\S]*?---/, "").trim();
 
-          // Attendi un attimo prima di mostrare la descrizione
+          // 2️⃣ Prepara testo per TTS: titoli letti, simboli rimossi
+          const ttsText = mdText
+            .replace(/^#+\s*/gm, "")  // Rimuove i # dai titoli
+            .replace(/[*_>\-]/g,"")   // Rimuove simboli di formattazione
+            .trim();
+
+          // 3️⃣ Mostra descrizione e avvia lettura
           setTimeout(() => {
             cardMarkdown.innerHTML = marked.parse(mdText);
             cardMarkdown.classList.add("visible");
 
-            // Sintesi vocale con Azure
-            playWithAzureTTS(mdText.replace(/[#*_>\-]/g,""));
+            playWithAzureTTS(ttsText);
           }, 1500);
         });
       }
