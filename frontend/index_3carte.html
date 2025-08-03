@@ -138,7 +138,7 @@
       });
     }
 
-    async function recognizeCard(button, slotImg, nextButton) {
+    async function recognizeCard(button, slotImg, nextButton, phase) {
       if (!SpeechRecognition) {
         alert("❌ Il tuo browser non supporta la Web Speech API");
         return;
@@ -171,6 +171,14 @@
         // Disabilita pulsante corrente per evitare doppio click
         button.disabled = true;
 
+        // Parla subito: "Il passato/presente/futuro è [nome carta]"
+        const phraseMap = {
+          "left": "Il passato è ",
+          "center": "Il presente è ",
+          "right": "Il futuro è "
+        };
+        await playWithAzureTTS(phraseMap[phase] + card.name);
+
         // Abilita il prossimo pulsante
         if (nextButton) nextButton.disabled = false;
 
@@ -190,9 +198,9 @@
     }
 
     // Eventi pulsanti per le tre carte
-    btnLeft.addEventListener('click', () => recognizeCard(btnLeft, cardLeft, btnCenter));
-    btnCenter.addEventListener('click', () => recognizeCard(btnCenter, cardCenter, btnRight));
-    btnRight.addEventListener('click', () => recognizeCard(btnRight, cardRight, null));
+    btnLeft.addEventListener('click', () => recognizeCard(btnLeft, cardLeft, btnCenter, "left"));
+    btnCenter.addEventListener('click', () => recognizeCard(btnCenter, cardCenter, btnRight, "center"));
+    btnRight.addEventListener('click', () => recognizeCard(btnRight, cardRight, null, "right"));
 
     // Spiegazione iniziale
     explainBtn.addEventListener('click', async () => {
