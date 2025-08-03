@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <title>Lettura Tarocchi - Tre Carte</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      background: #fafafa;
+      padding: 30px;
+    }
+    h1 { font-size: 28px; margin-bottom: 20px; }
+    button {
+      padding: 12px 24px;
+      font-size: 18px;
+      margin: 10px;
+      cursor: pointer;
+    }
+    .board {
+      display: flex;
+      justify-content: center;
+      gap: 40px;
+      margin-top: 30px;
+    }
+    .slot {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+    .card {
+      width: 180px;
+      height: 280px;
+      border: 2px solid #444;
+      border-radius: 8px;
+      object-fit: cover;
+      opacity: 0.3;
+      background: #ddd;
+    }
+    .card.visible {
+      opacity: 1;
+      background: none;
+    }
+    #output { margin-top: 20px; font-size: 20px; color: #333; }
+    #cardMarkdown {
+      max-width: 600px;
+      margin: 20px auto;
+      text-align: left;
+      font-size: 16px;
+      line-height: 1.5;
+      color: #333;
+      background: #fff;
+      padding: 15px;
+      border-radius: 8px;
+      border: 1px solid #ddd;
+      opacity: 0;
+      transition: opacity 0.8s ease-in;
+    }
+    #cardMarkdown.visible { opacity: 1; }
+    .error { color: red; font-weight: bold; }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body>
+  <h1>🔮 Lettura dei Tarocchi - Tre Carte</h1>
+
+  <button id="explainBtn">🎧 Spiegazione</button>
+  <p id="output">Premi i pulsanti per iniziare a rivelare le carte.</p>
+
+  <div class="board">
+    <div class="slot">
+      <img id="cardLeft" class="card" src="" alt="Carta Sinistra" />
+      <button id="btnLeft">🎤 Carta Sinistra, il Passato</button>
+    </div>
+    <div class="slot">
+      <img id="cardCenter" class="card" src="" alt="Carta Centrale" />
+      <button id="btnCenter" disabled>🎤 Carta Centrale, il Presente</button>
+    </div>
+    <div class="slot">
+      <img id="cardRight" class="card" src="" alt="Carta Destra" />
+      <button id="btnRight" disabled>🎤 Carta Destra, il Futuro</button>
+    </div>
+  </div>
+
+  <button id="interpretBtn" style="display:none; margin-top:30px;">
+    🔮 Leggi Interpretazione
+  </button>
+
+  <div id="cardMarkdown"></div>
+
+  <script type="module">
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+    const btnLeft = document.getElementById('btnLeft');
+    const btnCenter = document.getElementById('btnCenter');
+    const btnRight = document.getElementById('btnRight');
+    const interpretBtn = document.getElementById('interpretBtn');
+    const explainBtn = document.getElementById('explainBtn');
+    const output = document.getElementById('output');
+    const cardMarkdown = document.getElementById('cardMarkdown');
+
+    const cardLeft = document.getElementById('cardLeft');
+    const cardCenter = document.getElementById('cardCenter');
+    const cardRight = document.getElementById('cardRight');
+
+    let cards = [];
+    let availableCards = [];
+    let selectedCards = []; // oggetti con {name, file, description}
+
+    const introText = "Benvenuto nella lettura classica a tre carte. Premi i pulsanti in ordine per rivelare la carta sinistra, la carta centrale e la carta destra. Alla fine leggerò la loro interpretazione.";
+
+    async function loadCards() {
+      const response = await fetch('/cards.json');
+      cards = await response.json();
+      availableCards = [...cards];
+    }
+
+    async function playWithAzureTTS(text) {
+      const response = await fetch("/tts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text })
+      });
+
+      if (!response.ok) {
+        console.error("Errore TTS Azure:", await response.text());
+        return;
+      }
+
+      const audioBlob = await response.blob();
+      const audioUrl = URL.createObjectURL(audioBlob);
+      const audio = new Audio(audioUrl);
+      await audio.play();
+      return new Promise(resolve => {
+        audio.onended = resolve;
+      });
+    }
+
+    async function recognizeCard(button, slotImg, nextButton) {
+      if (!SpeechRecognition) {
+        alert("❌ Il tuo browser non supporta la Web Speech API");
+        return;
+      }
+
+      const recognition = new SpeechRecognition();
+      recognition.lang = "it-IT";
+      recognition.interimResults = false;
+
+      output.textContent = "🎧 Sto ascoltando...";
+      recognition.start();
+
+      recognition.addEventListener("result", async (event) => {
+        const transcript = event.results[0][0].transcript.toLowerCase();
+        output.textContent = "Hai detto: " + transcript;
+
+        const index = availableCards.findIndex(c => transcript.includes(c.name.toLowerCase()));
+        if (index === -1) {
+          output.innerHTML = `<span class="error">Carta non trovata. Premi di nuovo per riprovare.</span>`;
+          return;
+        }
+
+        const card = availableCards.splice(index, 1)[0];
+        selectedCards.push(card);
+
+        // Mostra immagine
+        slotImg.src = '/cards_arcani_maggiori/' + card.file;
+        slotImg.classList.add('visible');
+
+        // Disabilita pulsante corrente per evitare doppio click
+        button.disabled = true;
+
+        // Abilita il prossimo pulsante
+        if (nextButton) nextButton.disabled = false;
+
+        // Se tutte le carte sono state scelte, mostra interpretazione
+        if (selectedCards.length === 3) {
+          interpretBtn.style.display = 'block';
+          output.textContent = "Tutte le carte sono state rivelate! Premi per leggere l'interpretazione.";
+        }
+      });
+
+      recognition.addEventListener("end", () => {
+        // Se non è stata trovata una carta, resta pronto a riprovare
+        if (selectedCards.length < 3 && !button.disabled) {
+          output.innerHTML += "<br>🎤 Pronto a riprovare.";
+        }
+      });
+    }
+
+    // Eventi pulsanti per le tre carte
+    btnLeft.addEventListener('click', () => recognizeCard(btnLeft, cardLeft, btnCenter));
+    btnCenter.addEventListener('click', () => recognizeCard(btnCenter, cardCenter, btnRight));
+    btnRight.addEventListener('click', () => recognizeCard(btnRight, cardRight, null));
+
+    // Spiegazione iniziale
+    explainBtn.addEventListener('click', async () => {
+      output.textContent = "🔊 Spiegazione in corso...";
+      await playWithAzureTTS(introText);
+      output.textContent = "Pronto per iniziare la lettura.";
+    });
+
+    // Interpretazione finale
+    interpretBtn.addEventListener('click', async () => {
+      let combinedText = "";
+      cardMarkdown.innerHTML = "";
+      for (let card of selectedCards) {
+        const markdownFile = card.file.replace("RWS1909_-_", "").replace(".jpeg", ".md");
+        const res = await fetch('/descrizioni_arcani_maggiori/' + markdownFile);
+        if (!res.ok) continue;
+
+        let mdText = await res.text();
+        mdText = mdText.replace(/^---[\s\S]*?---/, "").trim(); // rimuovi frontmatter
+
+        // Mostra nel box e concatena
+        cardMarkdown.innerHTML += "<h3>" + card.name + "</h3>" + marked.parse(mdText);
+        combinedText += card.name + ". " + mdText.replace(/^#+\s*/gm, "").replace(/[*_>\-]/g,"") + ". ";
+      }
+      cardMarkdown.classList.add("visible");
+
+      // Legge tutta l'interpretazione finale
+      await playWithAzureTTS(combinedText);
+    });
+
+    loadCards();
+  </script>
+</body>
+</html>
